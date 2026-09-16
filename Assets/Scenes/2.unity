@@ -848,11 +848,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerRBController
   moveAction: {fileID: -1680190386980627800, guid: 052faaac586de48259a63d0c4782560b, type: 3}
-  fireAction: {fileID: 7822682181406968364, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   maxSpeed: 10
   acceleration: 10
   deceleration: 15
-  startingRocketCount: 8
+  startingRocketCount: 32
+  maxRocketCount: 32
   fireRocketCooldown: 3
   rocketPrefab: {fileID: 103760507013895266, guid: a8fbed68da5822149a214464ed80ad77, type: 3}
   spawnRadius: 2

@@ -8,7 +8,6 @@ public class PlayerRocketController : MonoBehaviour
 
     [Header("Input")]
     [SerializeField] private InputActionReference moveAction;
-    [SerializeField] private InputActionReference fireAction;
 
     [Header("Movement")]
     [SerializeField] private float maxSpeed = 5f;
@@ -50,13 +49,11 @@ public class PlayerRocketController : MonoBehaviour
     private void OnEnable()
     {
         moveAction.action.Enable();
-        fireAction.action.Enable();
     }
 
     private void OnDisable()
     {
         moveAction.action.Disable();
-        fireAction.action.Disable();
     }
 
     private void Start()
@@ -102,11 +99,8 @@ public class PlayerRocketController : MonoBehaviour
             currentRate * Time.deltaTime);
 
         transform.position += currSpeed * Time.deltaTime;
-
-        if (fireAction.action.WasPerformedThisFrame())
-        {
-            FireRocket();
-        }
+            
+        FireRocket();
     }
 
     private void OnDestroy()
