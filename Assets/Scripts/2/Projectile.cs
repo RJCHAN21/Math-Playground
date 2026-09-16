@@ -2,16 +2,23 @@ using UnityEngine;
 
 public class Projectile : MonoBehaviour
 {
-    [SerializeField] private float velocity = 10f;
-    
-    private Vector3 direction;
+    [SerializeField] private float speed = 10f;
+    [SerializeField] private float maxDist = 20f;
 
-    void Start()
+    private Vector3 spawnPos;
+
+    private void Start()
     {
+        spawnPos = transform.position;
     }
-    // Update is called once per frame
-    void Update()
+
+    private void Update()
     {
-        transform.position += direction * velocity * Time.deltaTime;
+        transform.position += transform.forward * speed * Time.deltaTime;
+
+        if ((transform.position - spawnPos).sqrMagnitude >= maxDist * maxDist)
+        {
+            Destroy(gameObject);
+        }
     }
 }

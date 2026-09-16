@@ -1,9 +1,11 @@
-using System.Collections;
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class PlayerRocketController : MonoBehaviour
 {
+    #region Fields
+
     [Header("Input")]
     [SerializeField] private InputActionReference moveAction;
     [SerializeField] private InputActionReference fireAction;
@@ -14,16 +16,36 @@ public class PlayerRocketController : MonoBehaviour
     [SerializeField] private float deceleration = 15f;
 
     [Header("Rocket Firing")]
+    [SerializeField] private int startingRocketCount = 8;
+    [SerializeField] private int maxRocketCount = 8;
     [SerializeField] private float fireRocketCooldown = 3f;
-    [SerializeField] GameObject rocketPrefab;
+    [SerializeField] private GameObject rocketPrefab;
+    [SerializeField] private float spawnRadius = 2f;
 
-    /*
-     * Stores the player's current movement speed and direction.
-     * This changes gradually toward targetSpeed instead of changing instantly.
-     */
     private Vector3 currSpeed = Vector3.zero;
+    private float nextFireTime;
+    private int currRocketCount;
 
-    private bool canFire = true;
+    #endregion
+
+    #region Properties
+
+    public static PlayerRocketController Instance { get; private set; }
+
+    public int CurrentRocketCount => currRocketCount;
+    public int MaxRocketCount => maxRocketCount;
+
+    public event Action<int> RocketCountChanged;
+
+    #endregion
+
+    #region Unity Lifecycle
+
+    private void Awake()
+    {
+        Instance = this;
+        currRocketCount = startingRocketCount;
+    }
 
     private void OnEnable()
     {
@@ -45,25 +67,11 @@ public class PlayerRocketController : MonoBehaviour
 
     private void Update()
     {
-        #region Movement
-
-        /*
-         * Read the player's 2D movement input.
-         * X represents left/right, while Y represents forward/backward.
-         */
         Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
 
         /*
-         * Cardinal-only movement:
-         * compare the strength of the horizontal and vertical inputs.
-         *
-         * Mathf.Abs() is used because negative input should have the same
-         * strength as positive input. For example, -1 and 1 are both full input.
-         *
-         * Whichever axis has the stronger input is kept.
-         * The weaker axis is set to zero, preventing diagonal movement.
-         *
-         * If both axes are equally strong, Y is kept because the else branch runs.
+         * Restrict movement to cardinal directions by keeping only
+         * the strongest input axis. Y takes priority when both are equal.
          */
         if (Mathf.Abs(moveInput.x) > Mathf.Abs(moveInput.y))
         {
@@ -74,93 +82,101 @@ public class PlayerRocketController : MonoBehaviour
             moveInput.x = 0f;
         }
 
-        /*
-         * Convert the 2D input into a 3D movement direction.
-         *
-         * X input moves along the object's right direction.
-         * Y input moves along the object's forward direction.
-         *
-         * Because one input axis was removed above, movement can only point
-         * forward, backward, left, or right.
-         */
         Vector3 movement =
             transform.right * moveInput.x +
             transform.forward * moveInput.y;
 
-        /*
-         * targetSpeed represents the velocity we WANT the player to eventually reach.
-         *
-         * movement gives the direction.
-         * maxSpeed determines how fast the player should move in that direction.
-         *
-         */
         Vector3 targetSpeed = movement * maxSpeed;
 
         /*
-         * sqrMagnitude tells us whether the movement vector has meaningful length.
-         *
-         * If movement is almost zero, the player is not giving movement input.
-         * Using sqrMagnitude avoids calculating a square root just to check this.
+         * sqrMagnitude should be sufficient as we only need to check
+         * whether movement input exists, not calculate its actual magnitude.
          */
         bool isMoving = movement.sqrMagnitude > 0.001f;
 
-        /*
-         * Choose how quickly currSpeed is allowed to change.
-         *
-         * While input exists, use acceleration so the player speeds up.
-         * Without input, use deceleration so the player slows down.
-         */
         float currentRate = isMoving ? acceleration : deceleration;
 
-        /*
-         * Gradually change currSpeed toward targetSpeed.
-         *
-         * MoveTowards changes the velocity value toward the desired velocity.
-         *
-         * currentRate tells us how much the speed may change per second.
-         * Time.deltaTime converts that into the amount allowed during this frame.
-         *
-         */
         currSpeed = Vector3.MoveTowards(
             currSpeed,
             targetSpeed,
             currentRate * Time.deltaTime);
 
-        /*
-         * Apply the current velocity to the player's position.
-         *
-         * Velocity is measured in distance per second.
-         * Multiplying by deltaTime gives the distance travelled during this frame.
-         *
-         * position change = velocity × time
-         */
         transform.position += currSpeed * Time.deltaTime;
-
-        #endregion
-
-        #region Rocket Firing
 
         if (fireAction.action.WasPerformedThisFrame())
         {
             FireRocket();
         }
+    }
 
-        #endregion
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
+    #endregion
+
+    #region Rocket Firing
+
+    /// <summary>
+    /// Adds rockets to the player's available rocket count without
+    /// exceeding the maximum capacity.
+    /// </summary>
+    /// <param name="amount">Number of rockets to add.</param>
+    /// <returns>True if at least one rocket could be added.</returns>
+    public bool AddRockets(int amount)
+    {
+        if (currRocketCount >= MaxRocketCount)
+            return false;
+        
+        currRocketCount = Mathf.Min(
+            currRocketCount + amount,
+            MaxRocketCount);
+
+        RocketCountChanged?.Invoke(currRocketCount);
+            
+        return true;
     }
 
     private void FireRocket()
     {
-        if (!canFire) return;
+        if (Time.time < nextFireTime || currRocketCount <= 0)
+            return;
 
-        // var rocket = Instantiate(rocketPrefab, transform.position, Quaternion.LookRotation(transform.forward));
+        nextFireTime = Time.time + fireRocketCooldown;
 
-        StartCoroutine(StartFireCooldown());
+        int rocketsToFire = currRocketCount;
+
+        SpawnRockets(rocketsToFire);
+
+        currRocketCount -= rocketsToFire;
+
+        RocketCountChanged?.Invoke(currRocketCount);
     }
 
-    private IEnumerator StartFireCooldown()
+    /// <summary>
+    /// Spawns rockets evenly around the object in a 360-degree radial pattern.
+    /// Each rocket is positioned at the spawn radius and rotated to face outward.
+    /// </summary>
+    /// <param name="rocketCount">The number of rockets to spawn.</param>
+    private void SpawnRockets(int rocketCount)
     {
-        canFire = false;
-        yield return new WaitForSeconds(fireRocketCooldown);
-        canFire = true;
+        float angleStep = 360f / rocketCount;
+        float angle = 0f;
+
+        for (int i = 0; i <= rocketCount - 1; i++)
+        {
+            Vector3 dir = Quaternion.AngleAxis(angle, Vector3.up) * Vector3.forward;
+            Vector3 spawnPos = transform.position + dir * spawnRadius;
+
+            Instantiate(rocketPrefab, spawnPos, Quaternion.LookRotation(dir));
+
+            angle += angleStep;
+        }
     }
+
+    #endregion
 }
