@@ -1,5 +1,7 @@
 This repository serves as my playground for Applied Mathematics for Games, focusing heavily on Unity.
 
+Unity Scenes, Scripts, and Prefabs have numbered folders to help indicate the Activity that the script was used for implementation.
+
 Past Course Video Submissions:
 
 **September 8, 2026**
