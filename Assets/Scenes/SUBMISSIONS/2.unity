@@ -851,8 +851,8 @@ MonoBehaviour:
   maxSpeed: 10
   acceleration: 10
   deceleration: 15
-  startingRocketCount: 32
-  maxRocketCount: 32
+  startingRocketCount: 8
+  maxRocketCount: 8
   fireRocketCooldown: 3
   rocketPrefab: {fileID: 103760507013895266, guid: a8fbed68da5822149a214464ed80ad77, type: 3}
   spawnRadius: 2
