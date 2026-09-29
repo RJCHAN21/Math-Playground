@@ -119,7 +119,7 @@ public class Turret2D : MonoBehaviour
 #region LineRenderer
     /// <summary>
     /// Adapts the LineRenderer so that it closely matches the Cone line of sight shape.
-    /// NOTE THAT THIS IS NOT 100% PERFECT AND THE BEST I COULD MAKE IT.
+    /// Note that this is only creates a closer approximate, so it may not perfectly fit the real cone area drawn by code.
     /// </summary>
     private void MapVisualToRange()
     {
@@ -141,16 +141,24 @@ public class Turret2D : MonoBehaviour
         float sideSlope = Mathf.Tan(halfAngleRad);
         
         Keyframe[] widths = new Keyframe[points];
+        
+        // This part's kinda complicated and took me a long while to make so I'm leaving future me some notes.
 
+        // Creates points along the LineRenderer and calculates the width at each point so the connected line forms the cone shape.
         for (int i = 0; i < points; i++)
         {
             float t = i / (float)(points - 1);
             float distance = range * t;
+            // halfWidth only measures from the center line to one side.
             float halfWidth = Mathf.Min(
+            // Mathf.Min uses whichever boundary is more restrictive at this point.
+            // This asks "At this distance forward, how wide is the cone allowed to be based on its angle?"
                 distance * sideSlope,
+            // Then asks "At this distance forward, how wide can we still be without leaving the circular maximum range?"
                 Mathf.Sqrt(range * range - distance * distance)
             );
 
+        
             lineRenderer.SetPosition(i, new Vector3(distance / scale, 0f, 0f));
             widths[i] = new Keyframe(t, 2f * halfWidth / scale);
         }
