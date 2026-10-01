@@ -44,6 +44,8 @@ public class PooledGun : MonoBehaviour
 
     private void OnDestroyPooledObject(PooledProjectile pooledObj)
     {
+        if (pooledObj == null) return;
+        
         Destroy(pooledObj.gameObject);
     }
 
