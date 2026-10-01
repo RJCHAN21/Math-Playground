@@ -11,8 +11,12 @@ public sealed class Flamethrower : ITurretFiringMode
     
     public void Fire(PooledGun gun)
     {
-        float halfSpread = 60f * 0.5f;
-        float angleOffset = Random.Range(-halfSpread, halfSpread);
-        gun.FirePattern(0.1f, angleOffset);
+        float halfSpread = fullSpreadAngle * 0.5f;
+
+        gun.FirePattern(
+            0.1f,
+            Random.Range(-halfSpread, halfSpread),
+            Random.Range(-halfSpread, halfSpread),
+            Random.Range(-halfSpread, halfSpread));
     }
 }
