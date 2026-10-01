@@ -20,7 +20,7 @@ public class Turret2D : MonoBehaviour
     [Header("Pooling")]
     [SerializeField] private PooledGun pooledGun;
 
-    [Header("Debug")]
+    [Header("Line of Sight Visual")]
     [SerializeField] private LineRenderer lineRenderer;
 #endregion
 
@@ -142,11 +142,12 @@ public class Turret2D : MonoBehaviour
         
         Keyframe[] widths = new Keyframe[points];
         
-        // This part's kinda complicated and took me a long while to make so I'm leaving future me some notes.
+        // This part's kinda complicated and took me a long while to make so I'm leaving future me some notes.  
 
         // Creates points along the LineRenderer and calculates the width at each point so the connected line forms the cone shape.
         for (int i = 0; i < points; i++)
         {
+            // percentage of the way from the turret to maximum range.
             float t = i / (float)(points - 1);
             float distance = range * t;
             // halfWidth only measures from the center line to one side.
@@ -157,7 +158,6 @@ public class Turret2D : MonoBehaviour
             // Then asks "At this distance forward, how wide can we still be without leaving the circular maximum range?"
                 Mathf.Sqrt(range * range - distance * distance)
             );
-
         
             lineRenderer.SetPosition(i, new Vector3(distance / scale, 0f, 0f));
             widths[i] = new Keyframe(t, 2f * halfWidth / scale);
