@@ -19,7 +19,7 @@ public class SimplePlayer : MonoBehaviour
 #endregion
 
 #region Runtime Properties
-    private float maxTurnAngle = 15f;
+    private float maxTurnAngle = 30f;
     private Quaternion headingRot;
     private int hitCount = 0;
 #endregion

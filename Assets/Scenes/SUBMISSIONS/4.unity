@@ -152,6 +152,7 @@ MonoBehaviour:
   spawnOffset: -10
   missilePrefab: {fileID: 6816916312035750047, guid: 15c9b20eac08bdc4c86a1851c1a92dfe, type: 3}
   spawnInterval: 10
+  spawnSpread: 5
 --- !u!4 &177474710
 Transform:
   m_ObjectHideFlags: 0
@@ -479,8 +480,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SimplePlayer
   turnAction: {fileID: -1680190386980627800, guid: 052faaac586de48259a63d0c4782560b, type: 3}
-  turnSpeed: 10
-  hitCooldown: 0.25
+  forwardSpeed: 5
+  yawSpeed: 20
+  turnSpeed: 60
   hitRadius: 1
   onHit:
     m_PersistentCalls:

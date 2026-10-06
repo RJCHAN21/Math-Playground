@@ -129,5 +129,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::HomingMissile
   hitRadius: 1
   lifetime: 5
-  speed: 8
-  turnSpeed: 30
+  speed: 10
+  turnSpeed: 1
