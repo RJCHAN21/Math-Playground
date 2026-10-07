@@ -6,7 +6,7 @@ public class HomingMissile : MonoBehaviour
     [SerializeField] private float hitRadius = 1f;
     [SerializeField] private float lifetime = 5f;
     [SerializeField] private float speed = 10f;
-    [SerializeField] private float turnSpeed = 1f;
+    [SerializeField] private float turnSpeed = 0.65f;
 #endregion
 
 #region Runtime Properties

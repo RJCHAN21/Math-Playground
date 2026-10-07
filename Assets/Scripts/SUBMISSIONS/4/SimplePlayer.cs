@@ -11,17 +11,18 @@ public class SimplePlayer : MonoBehaviour
     [SerializeField] private float forwardSpeed = 5f;
     [SerializeField] private float yawSpeed = 20f;
     [SerializeField] private float turnSpeed = 60f;
+    [SerializeField] private int hp = 5;
 #endregion
 
 #region Public Properties
     public float hitRadius = 1f;
     public UnityEvent onHit;
+    public int HP => hp;
 #endregion
 
 #region Runtime Properties
     private float maxTurnAngle = 30f;
     private Quaternion headingRot;
-    private int hitCount = 0;
 #endregion
 
 #region Unity Life Cycle
@@ -69,9 +70,9 @@ public class SimplePlayer : MonoBehaviour
 #region Hit Logic
     public void HitPlayer()
     {
-        hitCount++;
+        hp--;
 
-        if (hitCount < 5) return;
+        if (hp > 0) return;
 
         Debug.Log("Player was caught by homing missile.");
         RestartGame();

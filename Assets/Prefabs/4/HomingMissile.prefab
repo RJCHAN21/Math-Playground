@@ -130,4 +130,4 @@ MonoBehaviour:
   hitRadius: 1
   lifetime: 5
   speed: 10
-  turnSpeed: 1
+  turnSpeed: 0.65
