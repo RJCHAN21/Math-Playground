@@ -39,17 +39,23 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
-        #region Movement
-        
+        Move();
+        Look();
+    }
+    
+#region Movement
+    private void Move()
+    {
         Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
         Vector3 movement = transform.right * moveInput.x + transform.forward * moveInput.y;
 
         transform.position += movement * moveSpeed * Time.deltaTime;
+    }
+#endregion
 
-        #endregion
-
-        #region Camera Controls
-
+#region Camera Controls
+    private void Look()
+    {
         Vector2 lookInput = lookAction.action.ReadValue<Vector2>();
 
         transform.Rotate(Vector3.up, lookInput.x * mouseSensitivity);
@@ -57,8 +63,7 @@ public class PlayerController : MonoBehaviour
         cameraPitch -= lookInput.y * mouseSensitivity;
         cameraPitch = Mathf.Clamp(cameraPitch, -90f, 90f);
 
-        cameraTransform.localRotation = Quaternion.Euler(cameraPitch, 0f, 0f);
-
-        #endregion
+        cameraTransform.localRotation = Quaternion.Euler(cameraPitch, 0f, 0f); 
     }
+#endregion
 }
