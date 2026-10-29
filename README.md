@@ -13,9 +13,13 @@ Activity 2: Player Rocket Barrage<br>
 Link: https://drive.google.com/file/d/1rP0K8qI3c0NmOZeS4ZWe4aPLmbCgK9kv/view?usp=sharing<br>
 
 **September 22, 2026**<br>
-Activity 3: Turrets<br>
+Week 3: Turrets<br>
 Link: https://drive.google.com/file/d/1SyGMaqd7Txzvqu0jvALgFyL5PGVn-Kwy/view?usp=sharing<br>
 
 **October 6, 2026**<br>
-Activity 5: Homing Missiles Using Quaternions<br>
+Week 5: Homing Missiles Using Quaternions<br>
 Link: https://drive.google.com/file/d/1W0DHVTs64X3PYFrXGV05PpPIF1Zue-sS/view?usp=sharing<br>
+
+**October 29, 2026**<br>
+Week 8: Collision Detection<br>
+Link: https://drive.google.com/file/d/1_PZXwuvUTZbMSdqxHyKUF35YDQNprXfv/view?usp=sharing<br>
