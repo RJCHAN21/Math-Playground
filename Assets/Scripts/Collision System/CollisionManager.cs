@@ -47,20 +47,22 @@ public class CollisionManager : MonoBehaviour
                 CustomCollider other = colliders[j];
                 ColliderBounds otherCurrentBounds = other.Bounds;
 
-                if (!IsColliding(currentBounds, otherCurrentBounds))
-                    continue;
-                
-                if (collider.IsTrigger)
-                    nextTriggerContacts.Add((collider, other));
-                
-                if (other.IsTrigger)
-                    nextTriggerContacts.Add((other, collider));
-                
-                if (collider.IsCollideable && other.IsCollideable)
+                bool overlapsNow = IsColliding(currentBounds, otherCurrentBounds);
+
+                if (overlapsNow)
                 {
-                    collider.NotifyCollision(other);
-                    currentBounds = collider.Bounds;
+                    if (collider.IsTrigger)
+                        nextTriggerContacts.Add((collider, other));
+
+                    if (other.IsTrigger)
+                        nextTriggerContacts.Add((other, collider));
                 }
+
+                if (!collider.IsCollideable || !other.IsCollideable)
+                    continue;
+
+                collider.NotifyCollision(other);
+                currentBounds = collider.Bounds;
             }
         }
 

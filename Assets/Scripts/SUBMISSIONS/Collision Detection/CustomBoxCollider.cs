@@ -62,6 +62,7 @@ public class CustomBoxCollider : MonoBehaviour, CustomCollider
 
     private void Update()
     {
+        RegisterWithManager();
         SyncSize();
     }
 
@@ -86,65 +87,84 @@ public class CustomBoxCollider : MonoBehaviour, CustomCollider
         Vector3 maxMovement = currentBounds.max - PreviousBounds.max;
         Vector3 otherMinMovement = otherCurrentBounds.min - other.PreviousBounds.min;
         Vector3 otherMaxMovement = otherCurrentBounds.max - other.PreviousBounds.max;
-        
+
         Vector3 relativeMinMovement = minMovement - otherMaxMovement;
         Vector3 relativeMaxMovement = maxMovement - otherMinMovement;
 
+        Vector3 previousMinFaceGap = PreviousBounds.min - other.PreviousBounds.max;
+        Vector3 previousMaxFaceGap = other.PreviousBounds.min - PreviousBounds.max;
+
+        Vector3 minFaceGapReduction = -relativeMinMovement;
+        Vector3 maxFaceGapReduction = relativeMaxMovement;
+
+        Vector3 currentMinFaceGap = previousMinFaceGap - minFaceGapReduction;
+        Vector3 currentMaxFaceGap = previousMaxFaceGap - maxFaceGapReduction;
+
         float contactTolerance = CollisionManager.ContactTolerance;
-
-        bool wasOnLeft = PreviousBounds.max.x <= other.PreviousBounds.min.x + contactTolerance;
-        bool wasAbove = PreviousBounds.min.y >= other.PreviousBounds.max.y - contactTolerance;
-        bool wasInFront = PreviousBounds.max.z <= other.PreviousBounds.min.z + contactTolerance;
-
-        Vector3 previousGap = new Vector3(
-            wasOnLeft
-                ? other.PreviousBounds.min.x - PreviousBounds.max.x
-                : PreviousBounds.min.x - other.PreviousBounds.max.x,
-
-            wasAbove
-                ? PreviousBounds.min.y - other.PreviousBounds.max.y
-                : other.PreviousBounds.min.y - PreviousBounds.max.y,
-
-            wasInFront
-                ? other.PreviousBounds.min.z - PreviousBounds.max.z
-                : PreviousBounds.min.z - other.PreviousBounds.max.z
-        );
-
-        Vector3 gapReduction = new Vector3(
-            wasOnLeft ? relativeMaxMovement.x : -relativeMinMovement.x,
-            wasAbove ? -relativeMinMovement.y : relativeMaxMovement.y,
-            wasInFront ? relativeMaxMovement.z : -relativeMinMovement.z
-        );
-        
         float movementFractionAtContact = -1f;
-        Vector3 contactAxes = Vector3.zero;
+        float exitFraction = 1f;
+        Vector3 contactDirection = Vector3.zero;
 
         for (int axis = 0; axis < 3; axis++)
         {
-            float previousAxisGap = previousGap[axis];
-            float axisGapReduction = gapReduction[axis];
+            for (int side = 0; side < 2; side++)
+            {
+                bool checkingMinFace = side == 0;
 
-        if (previousAxisGap < -contactTolerance || axisGapReduction <= 0f)
-            continue;
+                float previousAxisGap = checkingMinFace
+                    ? previousMinFaceGap[axis]
+                    : previousMaxFaceGap[axis];
 
-        previousAxisGap = Mathf.Max(previousAxisGap, 0f);
+                float currentAxisGap = checkingMinFace
+                    ? currentMinFaceGap[axis]
+                    : currentMaxFaceGap[axis];
 
-        if (previousAxisGap > axisGapReduction) continue;
+                float axisGapReduction = checkingMinFace
+                    ? minFaceGapReduction[axis]
+                    : maxFaceGapReduction[axis];
 
-        float axisMovementFractionAtContact = previousAxisGap / axisGapReduction;
+                if (previousAxisGap > 0f && currentAxisGap > 0f) return;
 
-        if (axisMovementFractionAtContact < movementFractionAtContact) continue;
+                if (currentAxisGap > 0f)
+                {
+                    float axisMovementFractionAtExit = previousAxisGap / axisGapReduction;
 
-        if (axisMovementFractionAtContact > movementFractionAtContact)
+                    exitFraction = Mathf.Min(exitFraction, axisMovementFractionAtExit);
+                }
+
+                if (previousAxisGap < -contactTolerance || axisGapReduction <= 0f)
+                    continue;
+
+                previousAxisGap = Mathf.Max(previousAxisGap, 0f);
+
+                float axisMovementFractionAtContact = previousAxisGap / axisGapReduction;
+
+                if (axisMovementFractionAtContact < movementFractionAtContact)
+                    continue;
+
+                if (axisMovementFractionAtContact > movementFractionAtContact)
+                {
+                    movementFractionAtContact = axisMovementFractionAtContact;
+                    contactDirection = Vector3.zero;
+                }
+
+                contactDirection[axis] = checkingMinFace ? 1f : -1f;
+            }
+        }
+
+        if (movementFractionAtContact > exitFraction)
+            return;
+
+        if (movementFractionAtContact < 0f)
         {
-            movementFractionAtContact = axisMovementFractionAtContact;
-            contactAxes = Vector3.zero;
+            ResolveExistingOverlap(other, currentBounds, otherCurrentBounds);
+            return;
         }
 
-            contactAxes[axis] = 1f;
-        }
-                
-        if (movementFractionAtContact < 0f) return;
+        Vector3 contactAxes = new Vector3(
+            Mathf.Abs(contactDirection.x),
+            Mathf.Abs(contactDirection.y),
+            Mathf.Abs(contactDirection.z));
 
         Vector3 minAtContact = PreviousBounds.min + minMovement * movementFractionAtContact;
         Vector3 maxAtContact = PreviousBounds.max + maxMovement * movementFractionAtContact;
@@ -154,11 +174,57 @@ public class CustomBoxCollider : MonoBehaviour, CustomCollider
         ApplyBounds(minAtContact, maxAtContact, contactAxes);
         other.ApplyBounds(otherMinAtContact, otherMaxAtContact, contactAxes);
 
-        Vector3 contactDirection = new Vector3(
-            wasOnLeft ? -contactAxes.x : contactAxes.x,
-            wasAbove ? contactAxes.y : -contactAxes.y,
-            wasInFront ? -contactAxes.z : contactAxes.z
-        );
+        if (registeredManager != null)
+        {
+            registeredManager.QueueCollisionContact(this, other, contactDirection);
+        }
+    }
+
+    private void ResolveExistingOverlap(CustomCollider other, ColliderBounds currentBounds, ColliderBounds otherCurrentBounds)
+    {
+        Vector3 minFaceOverlap = otherCurrentBounds.max - currentBounds.min;
+        Vector3 maxFaceOverlap = currentBounds.max - otherCurrentBounds.min;
+
+        float smallestOverlap = float.PositiveInfinity;
+        Vector3 contactDirection = Vector3.zero;
+
+        for (int axis = 0; axis < 3; axis++)
+        {
+            float minAxisOverlap = minFaceOverlap[axis];
+            float maxAxisOverlap = maxFaceOverlap[axis];
+
+            if (minAxisOverlap <= 0f || maxAxisOverlap <= 0f)
+                return;
+
+            bool useMinFace = minAxisOverlap <= maxAxisOverlap;
+
+            float axisOverlap = useMinFace
+                ? minAxisOverlap
+                : maxAxisOverlap;
+
+            if (axisOverlap >= smallestOverlap)
+                continue;
+
+            smallestOverlap = axisOverlap;
+            contactDirection = Vector3.zero;
+            contactDirection[axis] = useMinFace ? 1f : -1f;
+        }
+
+        Vector3 contactAxes = new Vector3(
+            Mathf.Abs(contactDirection.x),
+            Mathf.Abs(contactDirection.y),
+            Mathf.Abs(contactDirection.z));
+
+        float halfOverlap = smallestOverlap / 2f;
+        Vector3 movement = contactDirection * halfOverlap;
+
+        Vector3 correctedMin = currentBounds.min + movement;
+        Vector3 correctedMax = currentBounds.max + movement;
+        Vector3 otherCorrectedMin = otherCurrentBounds.min - movement;
+        Vector3 otherCorrectedMax = otherCurrentBounds.max - movement;
+
+        ApplyBounds(correctedMin, correctedMax, contactAxes);
+        other.ApplyBounds(otherCorrectedMin, otherCorrectedMax, contactAxes);
 
         if (registeredManager != null)
         {
@@ -180,7 +246,7 @@ public class CustomBoxCollider : MonoBehaviour, CustomCollider
             if (contactAxes[axis] == 0f) continue;
 
             selectedCenter[axis] = centerAtContact[axis];
-            size[axis] = sizeAtContact[axis];
+            size[axis] = size[axis] < 0f ? -sizeAtContact[axis] : sizeAtContact[axis];
         }
 
         if (overrideCenter)
