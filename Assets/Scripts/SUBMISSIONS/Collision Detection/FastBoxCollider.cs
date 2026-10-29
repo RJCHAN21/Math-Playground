@@ -55,54 +55,101 @@ public class FastBoxCollider : MonoBehaviour, FastCollider
         Vector3 otherMinMovement = other.Bounds.min - other.PreviousBounds.min;
         Vector3 otherMaxMovement = other.Bounds.max - other.PreviousBounds.max;
 
-        // The difference between how much their opposing faces have moved
+        // How differently did the opposing boundaries move?
         Vector3 relativeMinMovement = minMovement - otherMaxMovement;
         Vector3 relativeMaxMovement = maxMovement - otherMinMovement;
 
         bool wasOnLeft = PreviousBounds.max.x <= other.PreviousBounds.min.x;
+        bool wasAbove = PreviousBounds.min.y >= other.PreviousBounds.max.y;
+        bool wasInFront = PreviousBounds.max.z <= other.PreviousBounds.min.z;
 
-        float previousGap = wasOnLeft
-            ? other.PreviousBounds.min.x - PreviousBounds.max.x
-            : PreviousBounds.min.x - other.PreviousBounds.max.x;
+        // How much space was previously between the selected opposing faces?
+        Vector3 previousGap = new Vector3(
+            wasOnLeft
+                ? other.PreviousBounds.min.x - PreviousBounds.max.x
+                : PreviousBounds.min.x - other.PreviousBounds.max.x,
 
-        // This is just relativeClosingMovement but I renamed it to gapReduction for clarity.
-        // We use our corresponding side facing the other collider compared to their side facing us.
-        float gapReduction = wasOnLeft 
-            ? relativeMaxMovement.x
-            : -relativeMinMovement.x;
+            wasAbove
+                ? PreviousBounds.min.y - other.PreviousBounds.max.y
+                : other.PreviousBounds.min.y - PreviousBounds.max.y,
+
+            wasInFront
+                ? other.PreviousBounds.min.z - PreviousBounds.max.z
+                : PreviousBounds.min.z - other.PreviousBounds.max.z
+        );
+
+        // How much did that gap shrink during the attempted change?
+        Vector3 gapReduction = new Vector3(
+            wasOnLeft ? relativeMaxMovement.x : -relativeMinMovement.x,
+            wasAbove ? -relativeMinMovement.y : relativeMaxMovement.y,
+            wasInFront ? relativeMaxMovement.z : -relativeMinMovement.z
+        );
         
-        if (previousGap >= 0f && gapReduction > 0f && previousGap <= gapReduction)
+        // -1 means no valid contact fraction has been found yet.
+        float movementFractionAtContact = -1f;
+        Vector3 contactAxes = Vector3.zero;
+
+        for (int axis = 0; axis < 3; axis++)
         {
-            // This whole block basically says "How much of the attempted movement was allowed before contact?"
+            float previousAxisGap = previousGap[axis];
+            float axisGapReduction = gapReduction[axis];
 
-            float movementFractionAtContact = previousGap / gapReduction;
-            float minXAtContact = PreviousBounds.min.x + minMovement.x * movementFractionAtContact;
-            float maxXAtContact = PreviousBounds.max.x + maxMovement.x * movementFractionAtContact;
-            float otherMinXAtContact = other.PreviousBounds.min.x + otherMinMovement.x * movementFractionAtContact;
-            float otherMaxAtContact = other.PreviousBounds.max.x + otherMaxMovement.x * movementFractionAtContact;
+            bool reachedContact =
+                previousAxisGap >= 0f // Were the faces previously separated or touching?
+                && axisGapReduction > 0f // Did their gap shrink?
+                && previousAxisGap <= axisGapReduction; // Was that reduction enough to reach contact?
+            
+            if (!reachedContact) continue;
 
-            ApplyXBounds(minXAtContact, maxXAtContact);
-            other.ApplyXBounds(otherMinXAtContact, otherMaxAtContact);
+            // How much of the attempted movement was allowed before this axis’s faces touched?
+            float axisMovementFractionAtContact = previousAxisGap / axisGapReduction;
+
+            if (axisMovementFractionAtContact < movementFractionAtContact) continue;
+
+            // NOTE: We select the largest valid contact fraction for contacts occuring in multiple axes.
+            if (axisMovementFractionAtContact > movementFractionAtContact)
+            {
+                movementFractionAtContact = axisMovementFractionAtContact;
+                contactAxes = Vector3.zero;
+            }
+
+            contactAxes[axis] = 1f;
         }
+                
+        if (movementFractionAtContact < 0f) return;
+
+        // This block says to move it only through the allowed fraction.
+
+        Vector3 minAtContact = PreviousBounds.min + minMovement * movementFractionAtContact;
+        Vector3 maxAtContact = PreviousBounds.max + maxMovement * movementFractionAtContact;
+        Vector3 otherMinAtContact = other.PreviousBounds.min + otherMinMovement * movementFractionAtContact;
+        Vector3 otherMaxAtContact = other.PreviousBounds.max + otherMaxMovement * movementFractionAtContact;
+
+        ApplyBounds(minAtContact, maxAtContact, contactAxes);
+        other.ApplyBounds(otherMinAtContact, otherMaxAtContact, contactAxes);
     }
 
-    public void ApplyXBounds(float minX, float maxX)
+    // contactAxes serves as a marker on which axes to constrain.
+    public void ApplyBounds(Vector3 min, Vector3 max, Vector3 contactAxes)
     {
-        float centerX = (minX + maxX) / 2f;
-        float width = maxX - minX;
+        SyncSize();
 
-        size.x = width;
+        Vector3 centerAtContact = (min + max) / 2f;
+        Vector3 sizeAtContact = max - min;
+        Vector3 selectedCenter = overrideCenter ? center : transform.position;
+
+        for (int axis = 0; axis < 3; axis++)
+        {
+            if (contactAxes[axis] == 0f) continue;
+
+            selectedCenter[axis] = centerAtContact[axis];
+            size[axis] = sizeAtContact[axis];
+        }
 
         if (overrideCenter)
-        {
-            center.x = centerX;
-        }
+            center = selectedCenter;
         else
-        {
-            Vector3 position = transform.position;
-            position.x = centerX;
-            transform.position = position;
-        }
+            transform.position = selectedCenter;
 
         SyncSize();
     }
