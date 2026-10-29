@@ -1,13 +1,41 @@
 using UnityEngine;
+using System;
 
-public class FastBoxCollider : MonoBehaviour, FastCollider
+[ExecuteAlways]
+public class CustomBoxCollider : MonoBehaviour, CustomCollider
 {
+    [SerializeField] private bool isTrigger = false;
+    [SerializeField] private bool isCollideable = true;
     [SerializeField] private Vector3 center = new Vector3(0, 0, 0);
     [SerializeField] private bool overrideCenter = false;
     [SerializeField] private Vector3 size = new Vector3(1, 1, 1);
     [SerializeField] private bool matchToObjectSize = true;
     [SerializeField] private Color gizmosColor = Color.red;
      
+    public bool IsTrigger
+    {
+        get => isTrigger;
+        set => isTrigger = value;
+    }
+
+    public bool IsCollideable
+    {
+        get => isCollideable;
+        set => isCollideable = value;
+    }
+
+    public bool IsActive
+    {
+        get => this != null && isActiveAndEnabled;
+        set => enabled = value;
+    }
+
+    public event Action<CustomCollider, Vector3> CollisionContact;
+    public event Action<CustomCollider> TriggerEnter;
+    public event Action<CustomCollider> TriggerStay;
+    public event Action<CustomCollider> TriggerExit;
+    
+    private CollisionManager registeredManager;
     private Vector3 lastMatchedSize;
     private bool sizeMatchInitialized;
 
@@ -23,14 +51,13 @@ public class FastBoxCollider : MonoBehaviour, FastCollider
 
     public ColliderBounds PreviousBounds { get; set; }
 
+    private void OnEnable()
+    {
+        RegisterWithManager();
+    }
     private void Start()
     {
-        if (CollisionManager.Instance != null)
-        {
-            CollisionManager.Instance.Register(this);
-            PreviousBounds = Bounds;
-        }
-            
+        RegisterWithManager();
     }
 
     private void Update()
@@ -38,32 +65,37 @@ public class FastBoxCollider : MonoBehaviour, FastCollider
         SyncSize();
     }
 
-    private void OnDestroy()
+    private void OnDisable()
     {
-        if (CollisionManager.Instance != null)
-            CollisionManager.Instance.Unregister(this);    
+        UnregisterFromManager();
     }
 
-    public void NotifyCollision(FastCollider other)
+    private void OnDestroy()
     {
-        Debug.Log($"{gameObject.name} collided with {((Component)other).gameObject.name}");
+        UnregisterFromManager();
+    }
 
-        // NOTE: We're checking both min and max to also stop a growing object from physically colliding with another object.
+    public void NotifyCollision(CustomCollider other)
+    {
+        if (!isCollideable || !other.IsCollideable) return;
 
-        Vector3 minMovement = Bounds.min - PreviousBounds.min;
-        Vector3 maxMovement = Bounds.max - PreviousBounds.max;
-        Vector3 otherMinMovement = other.Bounds.min - other.PreviousBounds.min;
-        Vector3 otherMaxMovement = other.Bounds.max - other.PreviousBounds.max;
+        ColliderBounds currentBounds = Bounds;
+        ColliderBounds otherCurrentBounds = other.Bounds;
 
-        // How differently did the opposing boundaries move?
+        Vector3 minMovement = currentBounds.min - PreviousBounds.min;
+        Vector3 maxMovement = currentBounds.max - PreviousBounds.max;
+        Vector3 otherMinMovement = otherCurrentBounds.min - other.PreviousBounds.min;
+        Vector3 otherMaxMovement = otherCurrentBounds.max - other.PreviousBounds.max;
+        
         Vector3 relativeMinMovement = minMovement - otherMaxMovement;
         Vector3 relativeMaxMovement = maxMovement - otherMinMovement;
 
-        bool wasOnLeft = PreviousBounds.max.x <= other.PreviousBounds.min.x;
-        bool wasAbove = PreviousBounds.min.y >= other.PreviousBounds.max.y;
-        bool wasInFront = PreviousBounds.max.z <= other.PreviousBounds.min.z;
+        float contactTolerance = CollisionManager.ContactTolerance;
 
-        // How much space was previously between the selected opposing faces?
+        bool wasOnLeft = PreviousBounds.max.x <= other.PreviousBounds.min.x + contactTolerance;
+        bool wasAbove = PreviousBounds.min.y >= other.PreviousBounds.max.y - contactTolerance;
+        bool wasInFront = PreviousBounds.max.z <= other.PreviousBounds.min.z + contactTolerance;
+
         Vector3 previousGap = new Vector3(
             wasOnLeft
                 ? other.PreviousBounds.min.x - PreviousBounds.max.x
@@ -78,14 +110,12 @@ public class FastBoxCollider : MonoBehaviour, FastCollider
                 : PreviousBounds.min.z - other.PreviousBounds.max.z
         );
 
-        // How much did that gap shrink during the attempted change?
         Vector3 gapReduction = new Vector3(
             wasOnLeft ? relativeMaxMovement.x : -relativeMinMovement.x,
             wasAbove ? -relativeMinMovement.y : relativeMaxMovement.y,
             wasInFront ? relativeMaxMovement.z : -relativeMinMovement.z
         );
         
-        // -1 means no valid contact fraction has been found yet.
         float movementFractionAtContact = -1f;
         Vector3 contactAxes = Vector3.zero;
 
@@ -94,31 +124,27 @@ public class FastBoxCollider : MonoBehaviour, FastCollider
             float previousAxisGap = previousGap[axis];
             float axisGapReduction = gapReduction[axis];
 
-            bool reachedContact =
-                previousAxisGap >= 0f // Were the faces previously separated or touching?
-                && axisGapReduction > 0f // Did their gap shrink?
-                && previousAxisGap <= axisGapReduction; // Was that reduction enough to reach contact?
-            
-            if (!reachedContact) continue;
+        if (previousAxisGap < -contactTolerance || axisGapReduction <= 0f)
+            continue;
 
-            // How much of the attempted movement was allowed before this axis’s faces touched?
-            float axisMovementFractionAtContact = previousAxisGap / axisGapReduction;
+        previousAxisGap = Mathf.Max(previousAxisGap, 0f);
 
-            if (axisMovementFractionAtContact < movementFractionAtContact) continue;
+        if (previousAxisGap > axisGapReduction) continue;
 
-            // NOTE: We select the largest valid contact fraction for contacts occuring in multiple axes.
-            if (axisMovementFractionAtContact > movementFractionAtContact)
-            {
-                movementFractionAtContact = axisMovementFractionAtContact;
-                contactAxes = Vector3.zero;
-            }
+        float axisMovementFractionAtContact = previousAxisGap / axisGapReduction;
+
+        if (axisMovementFractionAtContact < movementFractionAtContact) continue;
+
+        if (axisMovementFractionAtContact > movementFractionAtContact)
+        {
+            movementFractionAtContact = axisMovementFractionAtContact;
+            contactAxes = Vector3.zero;
+        }
 
             contactAxes[axis] = 1f;
         }
                 
         if (movementFractionAtContact < 0f) return;
-
-        // This block says to move it only through the allowed fraction.
 
         Vector3 minAtContact = PreviousBounds.min + minMovement * movementFractionAtContact;
         Vector3 maxAtContact = PreviousBounds.max + maxMovement * movementFractionAtContact;
@@ -127,9 +153,20 @@ public class FastBoxCollider : MonoBehaviour, FastCollider
 
         ApplyBounds(minAtContact, maxAtContact, contactAxes);
         other.ApplyBounds(otherMinAtContact, otherMaxAtContact, contactAxes);
+
+        Vector3 contactDirection = new Vector3(
+            wasOnLeft ? -contactAxes.x : contactAxes.x,
+            wasAbove ? contactAxes.y : -contactAxes.y,
+            wasInFront ? -contactAxes.z : contactAxes.z
+        );
+
+        if (registeredManager != null)
+        {
+            registeredManager.QueueCollisionContact(
+                this, other, contactDirection);
+        }
     }
 
-    // contactAxes serves as a marker on which axes to constrain.
     public void ApplyBounds(Vector3 min, Vector3 max, Vector3 contactAxes)
     {
         SyncSize();
@@ -152,6 +189,48 @@ public class FastBoxCollider : MonoBehaviour, FastCollider
             transform.position = selectedCenter;
 
         SyncSize();
+    }
+
+    public void NotifyCollisionContact(CustomCollider other, Vector3 contactDirection)
+    {
+        CollisionContact?.Invoke(other, contactDirection);
+    }
+
+    public void NotifyTriggerEnter(CustomCollider other)
+    {
+        TriggerEnter?.Invoke(other);
+    }
+
+    public void NotifyTriggerStay(CustomCollider other)
+    {
+        TriggerStay?.Invoke(other);
+    }
+
+    public void NotifyTriggerExit(CustomCollider other)
+    {
+        TriggerExit?.Invoke(other);
+    }
+
+    private void RegisterWithManager()
+    {
+        if (!Application.IsPlaying(gameObject)) return;
+
+        if (!isActiveAndEnabled || registeredManager != null || CollisionManager.Instance == null)
+            return;
+
+        PreviousBounds = Bounds;
+
+        registeredManager = CollisionManager.Instance;
+        registeredManager.Register(this);
+    }
+
+    private void UnregisterFromManager()
+    {
+        CollisionManager manager = registeredManager;
+        registeredManager = null;
+
+        if (manager != null)
+            manager.Unregister(this);
     }
 
     private void SyncSize()
