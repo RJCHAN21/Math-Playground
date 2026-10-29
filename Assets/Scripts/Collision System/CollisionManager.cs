@@ -23,15 +23,18 @@ public class CollisionManager : MonoBehaviour
         for (int i = 0; i < colliders.Count; i++)
         {
             FastCollider collider = colliders[i];
-            for (int j = 0; j < colliders.Count; j++)
+            for (int j = i + 1; j < colliders.Count; j++)
             {
-                if (j == i) continue;
-
                 if (IsColliding(collider.Bounds, colliders[j].Bounds))
                 {
                     collider.NotifyCollision(colliders[j]);
                 }
             }
+        }
+
+        foreach (FastCollider collider in colliders)
+        {
+            collider.PreviousBounds = collider.Bounds;
         }
     }
 
